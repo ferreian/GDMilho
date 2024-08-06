@@ -27,7 +27,7 @@ if uploaded_file is not None:
         'ahe': 'Alt Espiga',
         'stdf': 'Pop Final',
         'data_colheita': 'Colheita',
-        'yield_sc_ha': 'Produção (sc/há)',
+        'yield_sc_ha': 'Produção (sc/ha)',
         'altitude': 'Altitude',
         'tipo_ensaio': 'Ensaio',
         'epoca': 'Época',
@@ -39,10 +39,10 @@ if uploaded_file is not None:
     df = df.rename(columns=column_mapping)
     
     # Calcular o maior valor de produção em todo o DataFrame
-    max_production_overall = df['Produção (sc/há)'].max()
+    max_production_overall = df['Produção (sc/ha)'].max()
     
     # Criar a nova coluna PR Maior
-    df['PR Maior'] = (df['Produção (sc/há)'] / max_production_overall) * 100
+    df['PR Maior'] = (df['Produção (sc/ha)'] / max_production_overall) * 100
     
     # Criar uma coluna separada para rótulos formatados
     df['PR Maior Label'] = df['PR Maior'].round(1).astype(str)
