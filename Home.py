@@ -33,7 +33,8 @@ if uploaded_file is not None:
         'epoca': 'Época',
         'investimento': 'Investimento',
         'municipio': 'Município',
-        'estado': 'UF'
+        'estado': 'UF',
+        'time': 'Time'  # Adicionando a coluna time
     }
     df = df.rename(columns=column_mapping)
     
@@ -51,11 +52,13 @@ if uploaded_file is not None:
     municipio_options = df['Município'].unique()
     uf_options = df['UF'].unique()
     ensaio_options = df['Ensaio'].unique()
+    time_options = df['Time'].unique()  # Adicionando as opções para a coluna Time
 
     selected_hibridos = st.sidebar.multiselect('Selecione os Híbridos', options=hibrido_options, default=[])
     selected_municipio = st.sidebar.selectbox('Selecione o Município', ['Todos'] + list(municipio_options))
     selected_uf = st.sidebar.multiselect('Selecione a UF', options=uf_options, default=[])
     selected_ensaio = st.sidebar.selectbox('Selecione o Ensaio', ['Todos'] + list(ensaio_options))
+    selected_time = st.sidebar.multiselect('Selecione o Time', options=time_options, default=[])  # Filtro para a coluna Time
 
     # Filtrar o DataFrame com base nas seleções
     df_filtered = df.copy()
@@ -67,6 +70,8 @@ if uploaded_file is not None:
         df_filtered = df_filtered[df_filtered['UF'].isin(selected_uf)]
     if selected_ensaio != 'Todos':
         df_filtered = df_filtered[df_filtered['Ensaio'] == selected_ensaio]
+    if selected_time:
+        df_filtered = df_filtered[df_filtered['Time'].isin(selected_time)]
 
     # Criar tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Dados Carregados", "Yield", "LxL e Vitrines", "Densidades", "População vs Rendimento"])
@@ -80,7 +85,7 @@ if uploaded_file is not None:
         cols = [
             'Híbridos', '% Acamadas', '% Quebradas', '% Dominadas', 'Alt Planta', 
             'Alt Espiga', 'Pop Final', 'Colheita', 'Produção (sc/há)', 'Município', 
-            'UF', 'Altitude', 'Ensaio', 'Época', 'Investimento', 'PR Maior'
+            'UF', 'Altitude', 'Ensaio', 'Época', 'Investimento', 'PR Maior', 'Time'
         ]
         if all(col in df_filtered.columns for col in cols):
             df_yield = df_filtered[cols]
@@ -98,7 +103,7 @@ if uploaded_file is not None:
             cols_order = [
                 'Híbridos', '% Acamadas', '% Quebradas', '% Dominadas', 'Alt Planta', 
                 'Alt Espiga', 'Pop Final', 'Colheita', 'Produção (sc/há)', 'PR Maior', 'PR Maior Label', 'Município', 
-                'UF', 'Altitude', 'Ensaio', 'Época', 'Investimento'
+                'UF', 'Altitude', 'Ensaio', 'Época', 'Investimento', 'Time'
             ]
             df_lxl_vitrines = df_lxl_vitrines[cols_order]
             
