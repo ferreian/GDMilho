@@ -180,7 +180,7 @@ if uploaded_file is not None:
                 st.plotly_chart(fig1)
 
                 # Agrupar dados por UF e Híbridos para evitar duplicados
-                grouped_data = df_lxl_vitrines.groupby(['UF', 'Híbridos'])['PR Maior'].mean().reset_index()
+                grouped_data = df_lxl_vitrines.groupby(['UF', 'Híbridos', 'Time'])['PR Maior'].mean().reset_index()
                 grouped_data['PR Maior Label'] = grouped_data['PR Maior'].round(1).astype(str)
                 
                 # Criar gráfico de calor para PR Maior com UF no eixo y e Híbridos no eixo x
@@ -196,7 +196,7 @@ if uploaded_file is not None:
                 df_selected_hybrids = df_filtered[df_filtered['Híbridos'].isin(selected_hybrids)]
                 
                 # Agrupar dados por UF e Híbridos para evitar duplicados
-                grouped_data_selected = df_selected_hybrids.groupby(['UF', 'Híbridos'])['PR Maior'].mean().reset_index()
+                grouped_data_selected = df_selected_hybrids.groupby(['UF', 'Híbridos', 'Time'])['PR Maior'].mean().reset_index()
                 grouped_data_selected['PR Maior Label'] = grouped_data_selected['PR Maior'].round(1).astype(str)
                 
                 # Criar gráfico de calor para PR Maior com UF no eixo y e Híbridos no eixo x
@@ -225,8 +225,8 @@ if uploaded_file is not None:
         st.write("População vs Rendimento:")
         
         # Criar box plot para População Final (Pop Final) no eixo x e Produção (sc/há) no eixo y
-        fig4 = px.box(df_filtered, x='Pop Final', y='Produção (sc/há)', color='Híbridos',
-                      title='Box Plot de População Final vs Produção (sc/há)',
+        fig4 = px.box(df_filtered, x='Híbridos', y='Produção (sc/há)', color='Híbridos',
+                      title='Box Plot de Produção por Híbrido',
                       labels={'Pop Final': 'População Final', 'Produção (sc/há)': 'Produção (sc/há)'})
         
         st.plotly_chart(fig4)
