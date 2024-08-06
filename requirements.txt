@@ -1,3 +1,4 @@
-plotly
 streamlit
-openpyxl
+pandas
+plotly.express
+plotly.graph_objects
