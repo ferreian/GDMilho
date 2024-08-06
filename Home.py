@@ -3,315 +3,225 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# Configurando o layout da página para modo wide
+# Configurar layout da página para modo wide
 st.set_page_config(layout="wide")
 
-# Função para carregar dados na sessão
-def load_data(uploaded_file):
-    if uploaded_file is not None:
-        df = pd.read_excel(uploaded_file)
-        # Verificando se as colunas necessárias estão presentes
-        required_columns = ['latitude', 'longitude', 'estado', 'prod_media_corr_sc', 'hibrido',
-                            'cidadeUF', 'conjuntaGeral', 'macroRegiao', 'microRegiao', 'populacao']
-        if all(column in df.columns for column in required_columns):
-            # Filtrando linhas que possuem valores NaN nas colunas necessárias
-            df = df.dropna(subset=required_columns)
-            st.session_state['dataframe'] = df
-            return df
-        else:
-            st.error(f"O arquivo deve conter as colunas {', '.join(required_columns)}")
-    return None
+# Título do aplicativo
+st.title('Dados GD Milho')
 
-# Definindo o título da página
-st.title('Dashboard Ensaios Comparativos de GD')
+# Carregar o arquivo Excel na barra lateral
+st.sidebar.title('Opções')
+uploaded_file = st.sidebar.file_uploader("Escolha um arquivo Excel", type=["xlsx", "xls"])
 
-# Adicionando o uploader na sidebar
-st.sidebar.title("Upload de Arquivo")
-uploaded_file = st.sidebar.file_uploader("Escolha um arquivo Excel", type=["xlsx"])
-
-# Carregando os dados na sessão
-df = load_data(uploaded_file)
-
-# Verificando se o dataframe está na sessão
-if 'dataframe' in st.session_state:
-    df = st.session_state['dataframe']
-
-    # Contar híbridos
-    st.write("Total de Híbridos:")
-    contagem_hibridos = df['hibrido'].nunique()
-    st.write(f"{contagem_hibridos}")
-
-    # Gráfico de rosca
-    st.write('Distribuição dos ensaios por UF:')
-    estado_counts = df['estado'].value_counts().reset_index()
-    estado_counts.columns = ['estado', 'count']
+if uploaded_file is not None:
+    # Ler o arquivo Excel
+    df = pd.read_excel(uploaded_file)
     
-    fig_pie = px.pie(estado_counts, values='count', names='estado', hole=0.5, 
-                     title=f"Total de Estados: {estado_counts['estado'].nunique()}",
-                     labels={'estado':'Estado', 'count':'Número de Ensaios'})
+    # Renomear colunas
+    column_mapping = {
+        'hy': 'Híbridos',
+        'ac': '% Acamadas',
+        'qb': '% Quebradas',
+        'dm': '% Dominadas',
+        'alt': 'Alt Planta',
+        'ahe': 'Alt Espiga',
+        'stdf': 'Pop Final',
+        'data_colheita': 'Colheita',
+        'yield_sc_ha': 'Produção (sc/há)',
+        'altitude': 'Altitude',
+        'tipo_ensaio': 'Ensaio',
+        'epoca': 'Época',
+        'investimento': 'Investimento',
+        'municipio': 'Município',
+        'estado': 'UF'
+    }
+    df = df.rename(columns=column_mapping)
+    
+    # Calcular o maior valor de produção em todo o DataFrame
+    max_production_overall = df['Produção (sc/há)'].max()
+    
+    # Criar a nova coluna PR Maior
+    df['PR Maior'] = (df['Produção (sc/há)'] / max_production_overall) * 100
+    
+    # Criar uma coluna separada para rótulos formatados
+    df['PR Maior Label'] = df['PR Maior'].round(1).astype(str)
+    
+    # Criar filtros na barra lateral
+    hibrido_options = df['Híbridos'].unique()
+    municipio_options = df['Município'].unique()
+    uf_options = df['UF'].unique()
+    ensaio_options = df['Ensaio'].unique()
 
-    fig_pie.update_traces(textinfo='percent+label', textposition='inside', hoverinfo='label+percent+value')
+    selected_hibridos = st.sidebar.multiselect('Selecione os Híbridos', options=hibrido_options, default=[])
+    selected_municipio = st.sidebar.selectbox('Selecione o Município', ['Todos'] + list(municipio_options))
+    selected_uf = st.sidebar.multiselect('Selecione a UF', options=uf_options, default=[])
+    selected_ensaio = st.sidebar.selectbox('Selecione o Ensaio', ['Todos'] + list(ensaio_options))
 
-    # Adicionando o número total de estados no centro do gráfico
-    fig_pie.add_annotation(dict(font=dict(size=20),
-                                x=0.5,
-                                y=0.5,
-                                showarrow=False,
-                                text=f"Total: {estado_counts['estado'].nunique()}",
-                                xanchor='center',
-                                yanchor='middle'))
+    # Filtrar o DataFrame com base nas seleções
+    df_filtered = df.copy()
+    if selected_hibridos:
+        df_filtered = df_filtered[df_filtered['Híbridos'].isin(selected_hibridos)]
+    if selected_municipio != 'Todos':
+        df_filtered = df_filtered[df_filtered['Município'] == selected_municipio]
+    if selected_uf:
+        df_filtered = df_filtered[df_filtered['UF'].isin(selected_uf)]
+    if selected_ensaio != 'Todos':
+        df_filtered = df_filtered[df_filtered['Ensaio'] == selected_ensaio]
 
-    st.plotly_chart(fig_pie, use_container_width=True)
-
-    # Tabela com a média, maior e menor produtividade por híbrido
-    st.write('Média de Produtividade por Híbrido:')
-    prod_media = df.groupby('hibrido')['prod_media_corr_sc'].agg(['mean', 'max', 'min']).reset_index()
-    prod_media.columns = ['Híbrido', 'Produtividade Média (sc)', 'Maior Produtividade (sc)', 'Menor Produtividade (sc)']
-    
-    # Calculando a média geral
-    media_geral = prod_media['Produtividade Média (sc)'].mean()
-    
-    # Calculando a porcentagem relativa em relação à média geral
-    prod_media['% da Média'] = ((prod_media['Produtividade Média (sc)'] - media_geral) / media_geral * 100).round(2)
-    
-    # Calculando a porcentagem em relação ao maior valor
-    max_value = prod_media['Produtividade Média (sc)'].max()
-    prod_media['% do Maior'] = ((prod_media['Produtividade Média (sc)'] - max_value) / max_value * 100).round(2)
-    
-    # Normalizando os dados
-    prod_media_norm = prod_media.copy()
-    prod_media_norm['Produtividade Média (sc)'] = (prod_media_norm['Produtividade Média (sc)'] - prod_media_norm['Produtividade Média (sc)'].min()) / (prod_media_norm['Produtividade Média (sc)'].max() - prod_media_norm['Produtividade Média (sc)'].min())
-    prod_media_norm['Maior Produtividade (sc)'] = (prod_media_norm['Maior Produtividade (sc)'] - prod_media_norm['Maior Produtividade (sc)'].min()) / (prod_media_norm['Maior Produtividade (sc)'].max() - prod_media_norm['Maior Produtividade (sc)'].min())
-    prod_media_norm['Menor Produtividade (sc)'] = (prod_media_norm['Menor Produtividade (sc)'] - prod_media_norm['Menor Produtividade (sc)'].min()) / (prod_media_norm['Menor Produtividade (sc)'].max() - prod_media_norm['Menor Produtividade (sc)'].min())
-    
-    # Definindo os pesos dos critérios
-    weights = {'Produtividade Média (sc)': 0.5, 'Maior Produtividade (sc)': 0.3, 'Menor Produtividade (sc)': 0.2}
-    
-    # Calculando a pontuação final
-    prod_media_norm['Pontuação Final'] = (prod_media_norm['Produtividade Média (sc)'] * weights['Produtividade Média (sc)'] +
-                                          prod_media_norm['Maior Produtividade (sc)'] * weights['Maior Produtividade (sc)'] +
-                                          prod_media_norm['Menor Produtividade (sc)'] * weights['Menor Produtividade (sc)'])
-    
-    # Ordenando a matriz de decisão em ordem decrescente pela pontuação final
-    prod_media_norm = prod_media_norm.sort_values(by='Pontuação Final', ascending=False)
-    
-    # Criação das abas
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Produtividade Média", "Percentagem da Média", "% em Relação ao Maior", "Matriz de Decisão", "Head to Head"])
-
-    # Híbridos a serem destacados em azul
-    hibridos_azul = ['9504VIP3', '9801VIP3', '9703TG', '9602VIP3', '9705VIP3']
+    # Criar tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Dados Carregados", "Yield", "LxL e Vitrines", "Densidades", "População vs Rendimento"])
 
     with tab1:
-        st.write('Gráfico de Barras da Produtividade Média por Híbrido (Ordem Decrescente):')
-        
-        # Ordenando por produtividade média em ordem decrescente
-        prod_media_sorted = prod_media.sort_values(by='Produtividade Média (sc)', ascending=False)
-        
-        # Definindo as cores das barras
-        colors = ['blue' if hibrido in hibridos_azul else 'gray' for hibrido in prod_media_sorted['Híbrido']]
-        
-        fig_bar = go.Figure()
-        fig_bar.add_trace(go.Bar(
-            x=prod_media_sorted['Híbrido'], 
-            y=prod_media_sorted['Produtividade Média (sc)'],
-            marker_color=colors,  # Aplicando as cores
-            text=prod_media_sorted['Produtividade Média (sc)'].round(1),  # Adicionando os valores como rótulos
-            textposition='outside'  # Posição dos rótulos fora das barras
-        ))
-        
-        # Adicionando linha da média
-        fig_bar.add_shape(
-            type='line',
-            line=dict(dash='dash', color='red'),
-            x0=-0.5,
-            x1=len(prod_media_sorted)-0.5,
-            y0=media_geral,
-            y1=media_geral
-        )
-        
-        # Adicionando anotação para a linha da média
-        fig_bar.add_annotation(
-            x=len(prod_media_sorted)-0.5,
-            y=media_geral,
-            text=f'Média: {media_geral:.2f}',
-            showarrow=False,
-            yshift=10,
-            font=dict(color='red')
-        )
-        
-        # Configurando o layout do gráfico de barras
-        fig_bar.update_layout(
-            title='Produtividade Média por Híbrido',
-            xaxis_title='Híbrido',
-            yaxis_title='Produtividade Média (sc)',
-            bargap=0.2,  # Ajustando o espaço entre as barras
-            showlegend=False
-        )
-        
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.write("Dados do Excel carregados:")
+        st.dataframe(df_filtered, width=1500)  # Ajuste o valor de width conforme necessário
 
     with tab2:
-        st.write('Gráfico de Barras da Percentagem da Média por Híbrido:')
-        
-        # Definindo as cores das barras
-        colors_pct = ['blue' if hibrido in hibridos_azul else 'gray' for hibrido in prod_media_sorted['Híbrido']]
-        
-        fig_bar_pct = go.Figure()
-        fig_bar_pct.add_trace(go.Bar(
-            x=prod_media_sorted['Híbrido'], 
-            y=prod_media_sorted['% da Média'],
-            marker_color=colors_pct,  # Aplicando as cores
-            text=prod_media_sorted['% da Média'].round(1),  # Adicionando os valores como rótulos
-            textposition='outside'  # Posição dos rótulos fora das barras
-        ))
-        
-        # Configurando o layout do gráfico de barras de porcentagem
-        fig_bar_pct.update_layout(
-            title='% da Média por Híbrido',
-            xaxis_title='Híbrido',
-            yaxis_title='% da Média',
-            bargap=0.2,  # Ajustando o espaço entre as barras
-            showlegend=False
-        )
-        
-        st.plotly_chart(fig_bar_pct, use_container_width=True)
-
+        # Selecionar as colunas especificadas
+        cols = [
+            'Híbridos', '% Acamadas', '% Quebradas', '% Dominadas', 'Alt Planta', 
+            'Alt Espiga', 'Pop Final', 'Colheita', 'Produção (sc/há)', 'Município', 
+            'UF', 'Altitude', 'Ensaio', 'Época', 'Investimento', 'PR Maior'
+        ]
+        if all(col in df_filtered.columns for col in cols):
+            df_yield = df_filtered[cols]
+            st.write("Yield:")
+            st.dataframe(df_yield, width=1500)  # Ajuste o valor de width conforme necessário
+        else:
+            st.write("O arquivo Excel não contém todas as colunas especificadas.")
+    
     with tab3:
-        st.write('Gráfico de Barras da Percentagem em Relação ao Maior por Híbrido:')
-        
-        # Definindo as cores das barras
-        colors_max = ['blue' if hibrido in hibridos_azul else 'gray' for hibrido in prod_media_sorted['Híbrido']]
-        
-        fig_bar_max = go.Figure()
-        fig_bar_max.add_trace(go.Bar(
-            x=prod_media_sorted['Híbrido'], 
-            y=prod_media_sorted['% do Maior'],
-            marker_color=colors_max,  # Aplicando as cores
-            text=prod_media_sorted['% do Maior'].round(1),  # Adicionando os valores como rótulos
-            textposition='outside'  # Posição dos rótulos fora das barras
-        ))
-        
-        # Configurando o layout do gráfico de barras de porcentagem em relação ao maior
-        fig_bar_max.update_layout(
-            title='% em Relação ao Maior por Híbrido',
-            xaxis_title='Híbrido',
-            yaxis_title='% do Maior',
-            bargap=0.2,  # Ajustando o espaço entre as barras
-            showlegend=False
-        )
-        
-        st.plotly_chart(fig_bar_max, use_container_width=True)
+        # Filtrar dados onde Ensaio não contém "densidade"
+        if 'Ensaio' in df_filtered.columns:
+            df_lxl_vitrines = df_filtered[~df_filtered['Ensaio'].str.contains('densidade', case=False, na=False)]
+            
+            # Reorganizar colunas para colocar PR Maior ao lado de Produção (sc/há)
+            cols_order = [
+                'Híbridos', '% Acamadas', '% Quebradas', '% Dominadas', 'Alt Planta', 
+                'Alt Espiga', 'Pop Final', 'Colheita', 'Produção (sc/há)', 'PR Maior', 'PR Maior Label', 'Município', 
+                'UF', 'Altitude', 'Ensaio', 'Época', 'Investimento'
+            ]
+            df_lxl_vitrines = df_lxl_vitrines[cols_order]
+            
+            st.write("LxL e Vitrines:")
+            st.dataframe(df_lxl_vitrines, width=1500)  # Ajuste o valor de width conforme necessário
+            
+            # Gerar sumário das principais estatísticas descritivas
+            if 'Produção (sc/há)' in df_lxl_vitrines.columns:
+                summary_stats = df_lxl_vitrines['Produção (sc/há)'].describe()
 
+                # Calcular estatísticas descritivas para os híbridos específicos
+                hybrids = ['9801 VIP3', '9705 VIP3', '9504 VIP3', 'K1627 VIP3', 'SZE6192 VIP3']
+                stats_hybrids = {hybrid: df_lxl_vitrines[df_lxl_vitrines['Híbridos'] == hybrid]['Produção (sc/há)'].describe() for hybrid in hybrids}
+                
+                # Combinar as estatísticas gerais com as dos híbridos específicos
+                combined_stats = summary_stats.to_frame(name='Geral')
+                for hybrid, stats in stats_hybrids.items():
+                    combined_stats[hybrid] = stats
+                
+                st.write("Sumário das Principais Estatísticas Descritivas:")
+                st.dataframe(combined_stats)
+                
+                # Calcular valores médios por híbrido para Produção (sc/há)
+                mean_production_by_hybrid = df_lxl_vitrines.groupby('Híbridos')['Produção (sc/há)'].mean().reset_index()
+                mean_production_by_hybrid = mean_production_by_hybrid.sort_values(by='Produção (sc/há)', ascending=False)
+                
+                # Definir cores para os híbridos específicos
+                colors = {
+                    '9705 VIP3': 'darkblue',
+                    '9801 VIP3': 'darkblue',
+                    '9504 VIP3': 'darkblue',
+                    'K1627 VIP3': '#FF8C00',  # Laranja escuro
+                    'SZE6192 VIP3': 'green'
+                }
+                mean_production_by_hybrid['Cor'] = mean_production_by_hybrid['Híbridos'].map(colors).fillna('gray')
+                
+                # Adicionar rótulos sem a diferença para o valor anterior
+                mean_production_by_hybrid['Label'] = mean_production_by_hybrid['Produção (sc/há)'].round(1).astype(str)
+
+                # Calcular a média de produção
+                media_producao = mean_production_by_hybrid['Produção (sc/há)'].mean()
+
+                # Criar gráfico de barras para Produção (sc/há)
+                fig1 = px.bar(mean_production_by_hybrid, x='Híbridos', y='Produção (sc/há)', 
+                              title='Produção Média por Híbrido', 
+                              labels={'Híbridos': 'Híbridos', 'Produção (sc/há)': 'Produção Média (sc/há)'},
+                              color='Cor',
+                              color_discrete_map='identity',
+                              text='Label')
+                
+                # Configurar rótulos de dados em branco
+                fig1.update_traces(textfont_color='white')
+                
+                # Adicionar linha tracejada da média em vermelho
+                fig1.add_trace(go.Scatter(
+                    x=mean_production_by_hybrid['Híbridos'],
+                    y=[media_producao] * len(mean_production_by_hybrid),
+                    mode="lines",
+                    name="Média",
+                    line=dict(color="red", dash="dash")
+                ))
+
+                # Adicionar anotação para a média
+                fig1.add_annotation(
+                    x=mean_production_by_hybrid['Híbridos'].iloc[-1],
+                    y=media_producao,
+                    text=f"Média: {media_producao:.1f}",
+                    showarrow=True,
+                    arrowhead=1,
+                    ax=0,
+                    ay=-40
+                )
+                
+                st.plotly_chart(fig1)
+
+                # Agrupar dados por UF e Híbridos para evitar duplicados
+                grouped_data = df_lxl_vitrines.groupby(['UF', 'Híbridos'])['PR Maior'].mean().reset_index()
+                grouped_data['PR Maior Label'] = grouped_data['PR Maior'].round(1).astype(str)
+                
+                # Criar gráfico de calor para PR Maior com UF no eixo y e Híbridos no eixo x
+                heatmap_data = grouped_data.pivot(index='UF', columns='Híbridos', values='PR Maior')
+                heatmap_data_labels = grouped_data.pivot(index='UF', columns='Híbridos', values='PR Maior Label')
+                fig2 = px.imshow(heatmap_data, aspect="auto", color_continuous_scale=['lightcoral', 'lightgreen', 'darkgreen'], 
+                                 labels={'color': 'PR Maior'}, title='Mapa de Calor da Produção Relativa (PR Maior)')
+                fig2.update_traces(text=heatmap_data_labels, texttemplate="%{text}", textfont_color='white')
+                st.plotly_chart(fig2)
+
+                # Filtrar dados para os híbridos específicos
+                selected_hybrids = ['9801 VIP3', '9705 VIP3', '9504 VIP3', 'SZE6192 VIP3', 'K1627 VIP3']
+                df_selected_hybrids = df_filtered[df_filtered['Híbridos'].isin(selected_hybrids)]
+                
+                # Agrupar dados por UF e Híbridos para evitar duplicados
+                grouped_data_selected = df_selected_hybrids.groupby(['UF', 'Híbridos'])['PR Maior'].mean().reset_index()
+                grouped_data_selected['PR Maior Label'] = grouped_data_selected['PR Maior'].round(1).astype(str)
+                
+                # Criar gráfico de calor para PR Maior com UF no eixo y e Híbridos no eixo x
+                heatmap_data_selected = grouped_data_selected.pivot(index='UF', columns='Híbridos', values='PR Maior')
+                heatmap_data_labels_selected = grouped_data_selected.pivot(index='UF', columns='Híbridos', values='PR Maior Label')
+                fig3 = px.imshow(heatmap_data_selected, aspect="auto", color_continuous_scale=['lightcoral', 'lightgreen', 'darkgreen'], 
+                                 labels={'color': 'PR Maior'}, title='Mapa de Calor da Produção Relativa (PR Maior) para Híbridos Selecionados')
+                fig3.update_traces(text=heatmap_data_labels_selected, texttemplate="%{text}", textfont_color='white')
+                st.plotly_chart(fig3)
+
+            else:
+                st.write("A coluna 'Produção (sc/há)' não está presente no DataFrame.")
+        else:
+            st.write("A coluna 'Ensaio' não está presente no arquivo Excel.")
+    
     with tab4:
-        st.write('Matriz de Decisão:')
-        st.dataframe(prod_media_norm)
-        
-        # Definindo as cores das barras
-        colors_decision = ['blue' if hibrido in hibridos_azul else 'gray' for hibrido in prod_media_norm['Híbrido']]
-        
-        # Gráfico de barras com a pontuação final
-        st.write('Pontuação Final por Híbrido:')
-        fig_decision = go.Figure(go.Bar(
-            x=prod_media_norm['Híbrido'],
-            y=prod_media_norm['Pontuação Final'],
-            text=prod_media_norm['Pontuação Final'].round(2),
-            textposition='outside',
-            marker_color=colors_decision  # Aplicando as cores
-        ))
-        fig_decision.update_layout(title='Pontuação Final por Híbrido',
-                                   xaxis_title='Híbrido',
-                                   yaxis_title='Pontuação Final',
-                                   bargap=0.2)
-        st.plotly_chart(fig_decision, use_container_width=True)
-
+        # Filtrar dados onde Ensaio contém "densidade"
+        if 'Ensaio' in df_filtered.columns:
+            df_densidades = df_filtered[df_filtered['Ensaio'].str.contains('densidade', case=False, na=False)]
+            st.write("Densidades:")
+            st.dataframe(df_densidades, width=1500)  # Ajuste o valor de width conforme necessário
+        else:
+            st.write("A coluna 'Ensaio' não está presente no arquivo Excel.")
+    
     with tab5:
-        st.write('Comparação de Produtividade entre Híbridos:')
-        col1, col2, col3 = st.columns([3, 1, 3])
-
-        hibridos_head = ['9504VIP3', '9801VIP3', '9703TG', '9602VIP3', '9705VIP3']
-        hibridos_check = df[~df['hibrido'].isin(hibridos_head)]['hibrido'].unique()
-
-        with col1:
-            hibrido_head = st.selectbox('Head', options=hibridos_head, key='head_hibrido')
+        st.write("População vs Rendimento:")
         
-        with col2:
-            st.markdown("<h3 style='text-align: center;'>Versus</h3>", unsafe_allow_html=True)
+        # Criar box plot para População Final (Pop Final) no eixo x e Produção (sc/há) no eixo y
+        fig4 = px.box(df_filtered, x='Pop Final', y='Produção (sc/há)', color='Híbridos',
+                      title='Box Plot de População Final vs Produção (sc/há)',
+                      labels={'Pop Final': 'População Final', 'Produção (sc/há)': 'Produção (sc/há)'})
         
-        with col3:
-            hibrido_check = st.selectbox('Check', options=hibridos_check, key='check_hibrido')
-
-        # Filtros adicionais para Head to Head
-        st.write("Filtros Head to Head:")
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-            estado_filter = st.selectbox('Filtrar por Estado', options=['Todos'] + list(df['estado'].unique()))
-
-        with col2:
-            conjuntaGeral_h2h_filter = st.selectbox('Filtrar por ConjuntaGeral', options=['Todos'] + list(df['conjuntaGeral'].unique()), key='conjuntaGeral_h2h')
-
-        with col3:
-            macroRegiao_h2h_filter = st.selectbox('Filtrar por MacroRegião', options=['Todos'] + list(df['macroRegiao'].unique()), key='macroRegiao_h2h')
-
-        with col4:
-            microRegiao_h2h_filter = st.selectbox('Filtrar por MicroRegião', options=['Todos'] + list(df['microRegiao'].unique()), key='microRegiao_h2h')
-
-        # Filtrando os dados para os híbridos selecionados e aplicando filtros adicionais
-        df_head = df[df['hibrido'] == hibrido_head]
-        df_check = df[df['hibrido'] == hibrido_check]
-
-        if estado_filter != 'Todos':
-            df_head = df_head[df_head['estado'] == estado_filter]
-            df_check = df_check[df_check['estado'] == estado_filter]
-        if conjuntaGeral_h2h_filter != 'Todos':
-            df_head = df_head[df_head['conjuntaGeral'] == conjuntaGeral_h2h_filter]
-            df_check = df_check[df_check['conjuntaGeral'] == conjuntaGeral_h2h_filter]
-        if macroRegiao_h2h_filter != 'Todos':
-            df_head = df_head[df_head['macroRegiao'] == macroRegiao_h2h_filter]
-            df_check = df_check[df_check['macroRegiao'] == macroRegiao_h2h_filter]
-        if microRegiao_h2h_filter != 'Todos':
-            df_head = df_head[df_head['microRegiao'] == microRegiao_h2h_filter]
-            df_check = df_check[df_check['microRegiao'] == microRegiao_h2h_filter]
-
-        df_head = df_head[['cidadeUF', 'prod_media_corr_sc']]
-        df_check = df_check[['cidadeUF', 'prod_media_corr_sc']]
-
-        # Calculando a média de produtividade por município para cada híbrido
-        df_head_mean = df_head.groupby('cidadeUF')['prod_media_corr_sc'].mean().reset_index()
-        df_check_mean = df_check.groupby('cidadeUF')['prod_media_corr_sc'].mean().reset_index()
-
-        # Renomeando as colunas para facilitar a junção
-        df_head_mean.columns = ['cidadeUF', 'prod_head_mean']
-        df_check_mean.columns = ['cidadeUF', 'prod_check_mean']
-
-        # Mesclando os dados com base na cidadeUF
-        df_comparison = pd.merge(df_head_mean, df_check_mean, on='cidadeUF', how='inner')
-
-        # Calculando a diferença média de produtividade
-        df_comparison['Diferença'] = df_comparison['prod_head_mean'] - df_comparison['prod_check_mean']
-
-        # Definindo as cores das barras com base na diferença de produtividade
-        colors_comparison = ['green' if val > 0 else 'red' for val in df_comparison['Diferença']]
-
-        # Exibindo o gráfico de barras com a diferença média de produtividade
-        fig_comparison = go.Figure()
-        fig_comparison.add_trace(go.Bar(
-            x=df_comparison['cidadeUF'],
-            y=df_comparison['Diferença'],
-            marker_color=colors_comparison,
-            text=df_comparison['Diferença'].round(1),
-            textposition='outside'
-        ))
-
-        fig_comparison.update_layout(
-            title=f'Diferença de Produtividade Média entre {hibrido_head} e {hibrido_check} por Local',
-            xaxis_title='Local (cidadeUF)',
-            yaxis_title='Diferença de Produtividade Média (sc)',
-            bargap=0.2,
-            showlegend=False
-        )
-
-        st.plotly_chart(fig_comparison, use_container_width=True)
-
-else:
-    st.write("Por favor, carregue um arquivo Excel.")
+        st.plotly_chart(fig4)
