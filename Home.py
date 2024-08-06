@@ -27,7 +27,7 @@ if uploaded_file is not None:
         'ahe': 'Alt Espiga',
         'stdf': 'Pop Final',
         'data_colheita': 'Colheita',
-        'yield_sc_ha': 'Produção (sc/ha)',
+        'yield_sc_ha': 'Produção (sc/há)',
         'altitude': 'Altitude',
         'tipo_ensaio': 'Ensaio',
         'epoca': 'Época',
@@ -39,10 +39,10 @@ if uploaded_file is not None:
     df = df.rename(columns=column_mapping)
     
     # Calcular o maior valor de produção em todo o DataFrame
-    max_production_overall = df['Produção (sc/ha)'].max()
+    max_production_overall = df['Produção (sc/há)'].max()
     
     # Criar a nova coluna PR Maior
-    df['PR Maior'] = (df['Produção (sc/ha)'] / max_production_overall) * 100
+    df['PR Maior'] = (df['Produção (sc/há)'] / max_production_overall) * 100
     
     # Criar uma coluna separada para rótulos formatados
     df['PR Maior Label'] = df['PR Maior'].round(1).astype(str)
@@ -224,10 +224,13 @@ if uploaded_file is not None:
     with tab5:
         st.write("População vs Rendimento:")
         
-        # Criar box plot para População Final (Pop Final) no eixo x e Produção (sc/há) no eixo y
-        fig4 = px.box(df_filtered, x='Híbridos', y='Produção (sc/há)', color='Híbridos',
-                      title='Box Plot de Produção por Híbrido',
-                      labels={'Pop Final': 'População Final', 'Produção (sc/há)': 'Produção (sc/há)'})
+        # Categorizar a população em 4 faixas
+        df_filtered['População Categoria'] = pd.cut(df_filtered['Pop Final'], bins=4, labels=['Baixa', 'Média', 'Alta', 'Muito Alta'])
+
+        # Criar box plot para População Categoria no eixo x e Produção (sc/há) no eixo y
+        fig4 = px.box(df_filtered, x='População Categoria', y='Produção (sc/há)', color='Híbridos',
+                      title='Box Plot de Produção por Faixa de População',
+                      labels={'População Categoria': 'Faixa de População', 'Produção (sc/há)': 'Produção (sc/há)'})
         
         st.plotly_chart(fig4)
     
