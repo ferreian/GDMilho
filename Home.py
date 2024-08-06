@@ -34,7 +34,8 @@ if uploaded_file is not None:
         'investimento': 'Investimento',
         'municipio': 'Município',
         'estado': 'UF',
-        'time': 'Time'  # Adicionando a coluna time
+        'time': 'Time',
+        'u': 'Umidade'  # Adicionando a coluna umidade
     }
     df = df.rename(columns=column_mapping)
     
@@ -52,13 +53,13 @@ if uploaded_file is not None:
     municipio_options = df['Município'].unique()
     uf_options = df['UF'].unique()
     ensaio_options = df['Ensaio'].unique()
-    time_options = df['Time'].unique()  # Adicionando as opções para a coluna Time
+    time_options = df['Time'].unique()
 
     selected_hibridos = st.sidebar.multiselect('Selecione os Híbridos', options=hibrido_options, default=[])
     selected_municipio = st.sidebar.selectbox('Selecione o Município', ['Todos'] + list(municipio_options))
     selected_uf = st.sidebar.multiselect('Selecione a UF', options=uf_options, default=[])
-    selected_ensaio = st.sidebar.selectbox('Selecione o Ensaio', ['Todos'] + list(ensaio_options))
-    selected_time = st.sidebar.multiselect('Selecione o Time', options=time_options, default=[])  # Filtro para a coluna Time
+    selected_ensaio = st.sidebar.multiselect('Selecione o Ensaio', options=ensaio_options, default=[])
+    selected_time = st.sidebar.multiselect('Selecione o Time', options=time_options, default=[])
 
     # Filtrar o DataFrame com base nas seleções
     df_filtered = df.copy()
@@ -68,17 +69,17 @@ if uploaded_file is not None:
         df_filtered = df_filtered[df_filtered['Município'] == selected_municipio]
     if selected_uf:
         df_filtered = df_filtered[df_filtered['UF'].isin(selected_uf)]
-    if selected_ensaio != 'Todos':
-        df_filtered = df_filtered[df_filtered['Ensaio'] == selected_ensaio]
+    if selected_ensaio:
+        df_filtered = df_filtered[df_filtered['Ensaio'].isin(selected_ensaio)]
     if selected_time:
         df_filtered = df_filtered[df_filtered['Time'].isin(selected_time)]
 
     # Criar tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Dados Carregados", "Yield", "LxL e Vitrines", "População vs Rendimento", "Head to Head"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Dados Carregados", "Yield", "LxL e Vitrines", "População vs Rendimento", "Head to Head", "Interpolação"])
 
     with tab1:
         st.write("Dados do Excel carregados:")
-        st.dataframe(df_filtered, width=1500)  # Ajuste o valor de width conforme necessário
+        st.dataframe(df_filtered, width=1500)
 
     with tab2:
         # Selecionar as colunas especificadas
@@ -90,7 +91,7 @@ if uploaded_file is not None:
         if all(col in df_filtered.columns for col in cols):
             df_yield = df_filtered[cols]
             st.write("Yield:")
-            st.dataframe(df_yield, width=1500)  # Ajuste o valor de width conforme necessário
+            st.dataframe(df_yield, width=1500)
         else:
             st.write("O arquivo Excel não contém todas as colunas especificadas.")
     
@@ -99,12 +100,12 @@ if uploaded_file is not None:
         cols_order = [
             'Híbridos', '% Acamadas', '% Quebradas', '% Dominadas', 'Alt Planta', 
             'Alt Espiga', 'Pop Final', 'Colheita', 'Produção (sc/há)', 'PR Maior', 'PR Maior Label', 'Município', 
-            'UF', 'Altitude', 'Ensaio', 'Época', 'Investimento', 'Time'
+            'UF', 'Altitude', 'Ensaio', 'Época', 'Investimento', 'Time', 'Umidade'
         ]
         df_lxl_vitrines = df_filtered[cols_order]
         
         st.write("LxL e Vitrines:")
-        st.dataframe(df_lxl_vitrines, width=1500)  # Ajuste o valor de width conforme necessário
+        st.dataframe(df_lxl_vitrines, width=1500)
         
         # Gerar sumário das principais estatísticas descritivas
         if 'Produção (sc/há)' in df_lxl_vitrines.columns:
@@ -261,7 +262,8 @@ if uploaded_file is not None:
             title='Box Plot de Produção por Faixa de População',
             xaxis_title='Faixa de População',
             yaxis_title='Produção (sc/há)',
-            showlegend=True
+            showlegend=True,
+            boxmode='group'  # Garantir que os box plots sejam agrupados por categoria de população
         )
 
         st.plotly_chart(fig4)
@@ -345,3 +347,18 @@ if uploaded_file is not None:
             fig_head.update_layout(showlegend=False)  # Remover a legenda
             
             st.plotly_chart(fig_head)
+
+    with tab6:
+        st.write("Interpolação")
+        
+        # Calcular a média de produção e umidade para cada híbrido
+        grouped_interp = df_lxl_vitrines.groupby('Híbridos').agg({'Produção (sc/há)': 'mean', 'Umidade': 'mean'}).reset_index()
+        
+        # Criar scatter plot
+        fig_interp = px.scatter(grouped_interp, x='Umidade', y='Produção (sc/há)', text='Híbridos',
+                                title='Produção Média por Umidade Média',
+                                labels={'Umidade': 'Umidade Média', 'Produção (sc/há)': 'Produção Média (sc/há)'},
+                                size_max=10)
+        fig_interp.update_traces(textposition='top center')
+
+        st.plotly_chart(fig_interp)
